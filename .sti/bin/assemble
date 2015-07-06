@@ -75,7 +75,7 @@ fi
 copy_artifacts "deployments"
 
 echo " Veer - Custom Code"
-curl -o ROOT.war -O https://raw.githubusercontent.com/VeerMuchandi/ps/master/deployments/ROOT.war
+curl -o ${DEPLOY_DIR}/ROOT.war -O https://raw.githubusercontent.com/VeerMuchandi/ps/master/deployments/ROOT.war
 
 if [ -d $LOCAL_SOURCE_DIR/configuration ]; then
   echo "Copying config files from project..."
