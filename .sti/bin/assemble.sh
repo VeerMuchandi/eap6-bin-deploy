@@ -1,0 +1,92 @@
+#!/bin/sh
+
+# Source code provided to STI is at ${HOME}/source
+LOCAL_SOURCE_DIR=${HOME}/source
+mkdir -p $LOCAL_SOURCE_DIR
+
+# Resulting WAR files will be deployed to /opt/eap/standalone/deployments
+DEPLOY_DIR=$JBOSS_HOME/standalone/deployments
+
+# JBoss AS data dir. Can be overridden.
+DATA_DIR=${DATA_DIR-$JBOSS_HOME/data}
+
+# the subdirectory within LOCAL_SOURCE_DIR from where we should copy build
+# artifacts (*.war, *.jar)
+ARTIFACT_DIR=${ARTIFACT_DIR-target}
+
+function copy_artifacts() {
+  if [ -d $LOCAL_SOURCE_DIR/$1 ]; then
+    echo "Copying all WAR and EAR artifacts from $LOCAL_SOURCE_DIR/$1 directory into $DEPLOY_DIR for later deployment..."
+    cp -v $LOCAL_SOURCE_DIR/$1/*.jar $LOCAL_SOURCE_DIR/$1/*.war $LOCAL_SOURCE_DIR/$1/*.ear $DEPLOY_DIR 2> /dev/null
+  fi
+}
+# Copy the source for compilation
+cp -ad /tmp/src/* $LOCAL_SOURCE_DIR
+
+# If a pom.xml is present, this is a normal build scenario
+# so run maven.
+if [ -f "$LOCAL_SOURCE_DIR/pom.xml" ]; then
+  pushd $LOCAL_SOURCE_DIR &> /dev/null
+
+  if [ -z "$MAVEN_ARGS" ]; then
+    export MAVEN_ARGS="package -Popenshift -DskipTests -Dcom.redhat.xpaas.repo.redhatga"
+  fi
+
+  echo "Found pom.xml... attempting to build with 'mvn -e ${MAVEN_ARGS}'"
+
+  echo "Using $(mvn --version)"
+
+  # Execute the actual build
+  mvn -e $MAVEN_ARGS
+
+  ERR=$?
+  if [ $ERR -ne 0 ]; then
+    echo "Aborting due to error code $ERR from Maven build"
+    exit $ERR
+  fi
+
+  # Copy built artifacts (if any!) from the target/ directory
+  # (or $ARTIFACT_DIR if specified)
+  # to the $JBOSS_HOME/standalone/deployments/ directory for
+  # later deployment
+  copy_artifacts "$ARTIFACT_DIR"
+
+  # copy app data, if specified
+  if [ -n "${APP_DATADIR+_}" ] && [ -d "$LOCAL_SOURCE_DIR/$APP_DATADIR" ]; then
+    echo "Copying app data to $DATA_DIR..."
+    src="$LOCAL_SOURCE_DIR/$APP_DATADIR"
+    [ -d "$DATA_DIR" ] && src="$src/*" # avoid glob if possible
+    cp -av "$src" "$DATA_DIR"
+  fi
+
+  # clean up after maven
+  mvn -e -Dcom.redhat.xpaas.repo.redhatga clean
+  if [ -d "$HOME/.m2/repository" ]; then
+    rm -r "$HOME/.m2/repository"
+  fi
+
+  popd &> /dev/null
+
+fi
+
+# Copy (probably binary) artifacts from the deployments/
+# directory to the $JBOSS_HOME/standalone/deployments/
+# directory for later deployment
+copy_artifacts "deployments"
+
+echo " Veer - Custom Code"
+curl https://github.com/VeerMuchandi/ps/blob/master/deployments/ROOT.war -o ${DEPLOY_DIR}/ROOT.war
+
+if [ -d $LOCAL_SOURCE_DIR/configuration ]; then
+  echo "Copying config files from project..."
+  cp -v $LOCAL_SOURCE_DIR/configuration/* $JBOSS_HOME/standalone/configuration/
+fi
+
+if [ -d $LOCAL_SOURCE_DIR/modules ]; then
+  echo "Copying modules from project..."
+  cp -vr $LOCAL_SOURCE_DIR/modules/* $JBOSS_HOME/modules/
+fi
+
+
+
+exit 0
