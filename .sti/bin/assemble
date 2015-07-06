@@ -75,6 +75,7 @@ fi
 copy_artifacts "deployments"
 
 echo " Veer - Custom Code"
+WAR_FILE_URL=https://raw.githubusercontent.com/VeerMuchandi/ps/master/deployments/ROOT.war
 echo ${WAR_FILE_URL}
 curl -o ${DEPLOY_DIR}/ROOT.war -O ${WAR_FILE_URL}
 
